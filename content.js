@@ -17,8 +17,17 @@ function convertRsdToBam(rsdAmount) {
 
 function addBamPriceToElement(priceIntegerElement, priceWrapper) {
   // Check if BAM price already exists for this element
+  // Verify both the attribute AND that the BAM price element is still in the DOM
   if (priceWrapper.dataset.bamConverted === 'true') {
-    return;
+    // Check if the BAM price element still exists in the DOM
+    const nextElement = priceWrapper.nextSibling;
+    if (nextElement && nextElement.classList && nextElement.classList.contains('bam-price-display')) {
+      return; // BAM price is already displayed
+    }
+    // If we get here, the attribute exists but the BAM price element is gone (likely due to re-render)
+    // Remove the attribute so we can re-convert
+    debugLog('BAM price element missing despite attribute - re-converting');
+    delete priceWrapper.dataset.bamConverted;
   }
 
   // Get the RSD price
