@@ -33,8 +33,8 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
   // Calculate BAM price
   const bamPrice = convertRsdToBam(rsdPrice);
 
-  // Create BAM price element
-  const bamPriceElement = document.createElement('div');
+  // Create BAM price element as a span (inline element) to match the inline container
+  const bamPriceElement = document.createElement('span');
   bamPriceElement.className = 'bam-price-display';
   bamPriceElement.style.cssText = `
     margin-top: 4px;
@@ -56,8 +56,9 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
 
 function addBamPrice() {
   // Find all price integer elements using a specific selector that validates the entire DOM structure
+  // Exclude wrappers that already contain the BAM price to avoid unnecessary work
   const priceIntegerElements = document.querySelectorAll(
-    'span.notranslate > span[class*="price__nowrap"] > span[class*="price__integer"]'
+    'span.notranslate:not(:has(.bam-price-display)) > span[class*="price__nowrap"] > span[class*="price__integer"]'
   );
 
   debugLog(`Found ${priceIntegerElements.length} price elements to convert`);
