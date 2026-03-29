@@ -6,29 +6,9 @@ function convertRsdToBam(rsdAmount) {
   return (rsdAmount / RSD_TO_BAM_RATE).toFixed(2);
 }
 
-function addBamPrice() {
-  // Selector for the price wrapper
-  const priceWrapperSelector = '#content > div > div.pipf-page.js-product-pip > div.pipf-page__right-container > div.pipf-page__right-container-content > div.pipf-price-package > div.pipf-price-package__price-module-wrapper > div > div.pipcom-price-module__price > div > div > span > span.notranslate';
-
-  // Selector for price integer
-  const priceIntegerSelector = '#content > div > div.pipf-page.js-product-pip > div.pipf-page__right-container > div.pipf-page__right-container-content > div.pipf-price-package > div.pipf-price-package__price-module-wrapper > div > div.pipcom-price-module__price > div > div > span > span.notranslate > span.pipcom-price__nowrap > span';
-
-  // Selector for currency
-  const currencySelector = '#content > div > div.pipf-page.js-product-pip > div.pipf-page__right-container > div.pipf-page__right-container-content > div.pipf-price-package > div.pipf-price-package__price-module-wrapper > div > div.pipcom-price-module__price > div > div > span > span.notranslate > span.pipcom-price__currency';
-
-  const priceWrapper = document.querySelector(priceWrapperSelector);
-  const priceIntegerElement = document.querySelector(priceIntegerSelector);
-  const currencyElement = document.querySelector(currencySelector);
-
-  if (!priceWrapper || !priceIntegerElement || !currencyElement) {
-    console.log('IKEA RSD to BAM: Price elements not found');
-    return;
-  }
-
-  // Check if currency is RSD
-  const currency = currencyElement.textContent.trim();
-  if (currency !== 'RSD') {
-    console.log('IKEA RSD to BAM: Currency is not RSD');
+function addBamPriceToElement(priceIntegerElement, priceWrapper) {
+  // Check if BAM price already exists for this element
+  if (priceWrapper.dataset.bamConverted === 'true') {
     return;
   }
 
@@ -36,38 +16,62 @@ function addBamPrice() {
   const rsdPriceText = priceIntegerElement.textContent.trim();
   const rsdPrice = parseFloat(rsdPriceText.replace(/[^\d]/g, ''));
 
-  if (isNaN(rsdPrice)) {
-    console.log('IKEA RSD to BAM: Could not parse price');
+  if (isNaN(rsdPrice) || rsdPrice === 0) {
     return;
   }
 
   // Calculate BAM price
   const bamPrice = convertRsdToBam(rsdPrice);
 
-  // Check if BAM price already exists
-  if (priceWrapper.querySelector('.bam-price-display')) {
-    return;
-  }
-
   // Create BAM price element
   const bamPriceElement = document.createElement('div');
   bamPriceElement.className = 'bam-price-display';
   bamPriceElement.style.cssText = `
-    margin-top: 8px;
-    padding: 8px 12px;
+    margin-top: 4px;
+    padding: 4px 8px;
     background-color: #0058a3;
     color: white;
     border-radius: 4px;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     display: inline-block;
   `;
   bamPriceElement.textContent = `≈ ${bamPrice} BAM`;
 
+  // Mark as converted
+  priceWrapper.dataset.bamConverted = 'true';
+
   // Insert BAM price after the price wrapper
   priceWrapper.parentNode.insertBefore(bamPriceElement, priceWrapper.nextSibling);
 
   console.log(`IKEA RSD to BAM: Converted ${rsdPrice} RSD to ${bamPrice} BAM`);
+}
+
+function addBamPrice() {
+  // Find all span elements that have 'price__integer' in their class attribute
+  const allSpans = document.querySelectorAll('span[class*="price__integer"]');
+
+  if (allSpans.length === 0) {
+    console.log('IKEA RSD to BAM: No price elements found');
+    return;
+  }
+
+  allSpans.forEach((priceIntegerElement) => {
+    // Check if parent has 'price__nowrap' in its class
+    const parent = priceIntegerElement.parentElement;
+    if (!parent || !parent.className.includes('price__nowrap')) {
+      return;
+    }
+
+    // Get the grandparent which should be span.notranslate
+    const priceWrapper = parent.parentElement;
+    if (!priceWrapper || priceWrapper.tagName !== 'SPAN' || !priceWrapper.classList.contains('notranslate')) {
+      return;
+    }
+
+    // Add BAM price to this element
+    addBamPriceToElement(priceIntegerElement, priceWrapper);
+  });
 }
 
 // Run the conversion when page loads
