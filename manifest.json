@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "IKEA RSD to BAM Converter",
+  "version": "1.0",
+  "description": "Converts prices from RSD to BAM on IKEA Serbia website",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": ["https://www.ikea.com/rs/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
