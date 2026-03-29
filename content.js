@@ -43,31 +43,23 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
 
   // Insert BAM price after the price wrapper
   priceWrapper.parentNode.insertBefore(bamPriceElement, priceWrapper.nextSibling);
-
-  console.log(`IKEA RSD to BAM: Converted ${rsdPrice} RSD to ${bamPrice} BAM`);
 }
 
 function addBamPrice() {
-  // Find all span elements that have 'price__integer' in their class attribute
-  const allSpans = document.querySelectorAll('span[class*="price__integer"]');
+  // Find all price integer elements using a specific selector that validates the entire DOM structure
+  // and excludes already-converted prices
+  const priceIntegerElements = document.querySelectorAll(
+    'span.notranslate:not([data-bam-converted="true"]) > span[class*="price__nowrap"] > span[class*="price__integer"]'
+  );
 
-  if (allSpans.length === 0) {
-    console.log('IKEA RSD to BAM: No price elements found');
+  if (priceIntegerElements.length === 0) {
     return;
   }
 
-  allSpans.forEach((priceIntegerElement) => {
-    // Check if parent has 'price__nowrap' in its class
+  priceIntegerElements.forEach((priceIntegerElement) => {
+    // Get parent (price__nowrap wrapper) and grandparent (span.notranslate - final price wrapper)
     const parent = priceIntegerElement.parentElement;
-    if (!parent || !parent.className.includes('price__nowrap')) {
-      return;
-    }
-
-    // Get the grandparent which should be span.notranslate
     const priceWrapper = parent.parentElement;
-    if (!priceWrapper || priceWrapper.tagName !== 'SPAN' || !priceWrapper.classList.contains('notranslate')) {
-      return;
-    }
 
     // Add BAM price to this element
     addBamPriceToElement(priceIntegerElement, priceWrapper);
