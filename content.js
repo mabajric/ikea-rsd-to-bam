@@ -16,9 +16,10 @@ function convertRsdToBam(rsdAmount) {
 }
 
 function addBamPriceToElement(priceIntegerElement, priceWrapper) {
-  // Check if BAM price already exists for this element
-  if (priceWrapper.dataset.bamConverted === 'true') {
-    return;
+  // Check if BAM price already exists inside this element
+  const existingBamPrice = priceWrapper.querySelector('.bam-price-display');
+  if (existingBamPrice) {
+    return; // BAM price is already displayed
   }
 
   // Get the RSD price
@@ -32,8 +33,8 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
   // Calculate BAM price
   const bamPrice = convertRsdToBam(rsdPrice);
 
-  // Create BAM price element
-  const bamPriceElement = document.createElement('div');
+  // Create BAM price element as a span (inline element) to match the inline container
+  const bamPriceElement = document.createElement('span');
   bamPriceElement.className = 'bam-price-display';
   bamPriceElement.style.cssText = `
     margin-top: 4px;
@@ -47,20 +48,17 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
   `;
   bamPriceElement.textContent = `≈ ${bamPrice} BAM`;
 
-  // Mark as converted
-  priceWrapper.dataset.bamConverted = 'true';
-
-  // Insert BAM price after the price wrapper
-  priceWrapper.parentNode.insertBefore(bamPriceElement, priceWrapper.nextSibling);
+  // Insert BAM price inside the price wrapper (span.notranslate)
+  priceWrapper.appendChild(bamPriceElement);
 
   debugLog(`Converted ${rsdPrice} RSD to ${bamPrice} BAM`);
 }
 
 function addBamPrice() {
   // Find all price integer elements using a specific selector that validates the entire DOM structure
-  // and excludes already-converted prices
+  // Exclude wrappers that already contain the BAM price to avoid unnecessary work
   const priceIntegerElements = document.querySelectorAll(
-    'span.notranslate:not([data-bam-converted="true"]) > span[class*="price__nowrap"] > span[class*="price__integer"]'
+    'span.notranslate:not(:has(.bam-price-display)) > span[class*="price__nowrap"] > span[class*="price__integer"]'
   );
 
   debugLog(`Found ${priceIntegerElements.length} price elements to convert`);
