@@ -2,6 +2,15 @@
 // Conversion rate: 1 BAM ≈ 58.5 RSD (approximate rate, should be updated as needed)
 const RSD_TO_BAM_RATE = 58.5;
 
+// Debug flag - set to true to enable console logging
+const DEBUG = false;
+
+function debugLog(...args) {
+  if (DEBUG) {
+    console.log('[IKEA RSD→BAM]', ...args);
+  }
+}
+
 function convertRsdToBam(rsdAmount) {
   return (rsdAmount / RSD_TO_BAM_RATE).toFixed(2);
 }
@@ -43,6 +52,8 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
 
   // Insert BAM price after the price wrapper
   priceWrapper.parentNode.insertBefore(bamPriceElement, priceWrapper.nextSibling);
+
+  debugLog(`Converted ${rsdPrice} RSD to ${bamPrice} BAM`);
 }
 
 function addBamPrice() {
@@ -51,6 +62,8 @@ function addBamPrice() {
   const priceIntegerElements = document.querySelectorAll(
     'span.notranslate:not([data-bam-converted="true"]) > span[class*="price__nowrap"] > span[class*="price__integer"]'
   );
+
+  debugLog(`Found ${priceIntegerElements.length} price elements to convert`);
 
   if (priceIntegerElements.length === 0) {
     return;
