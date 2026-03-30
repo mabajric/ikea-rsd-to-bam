@@ -1,142 +1,292 @@
-// IKEA RSD to BAM Price Converter
-// Conversion rate: 1 BAM ≈ 58.5 RSD (approximate rate, should be updated as needed)
-const RSD_TO_BAM_RATE = 58.5;
+/**
+ * IKEA RSD to BAM Price Converter
+ * Automatically converts prices from Serbian Dinar (RSD) to Bosnian Convertible Mark (BAM)
+ * on IKEA Serbia website
+ */
 
-// Debug flag - set to true to enable console logging
-const DEBUG = false;
+// ============================================================================
+// Constants and Configuration
+// ============================================================================
 
-// Store the display mode setting
-let displayMode = 'alongside'; // default value
+const CONFIG = Object.freeze({
+  RSD_TO_BAM_RATE: 58.5,
+  DEBUG: false,
+  DEFAULT_DISPLAY_MODE: 'alongside',
+  MARKER_CLASS: 'bam-price-display',
+  DEBOUNCE_DELAY: 150,
+  PRICE_REGEX: /(\d+[\d.,]*)\s*RSD/i,
+  CURRENCY_SYMBOLS: ['RSD', 'Дин', 'din'],
+});
 
-function debugLog(...args) {
-  if (DEBUG) {
+const SELECTORS = Object.freeze({
+  PRICE_INTEGER: 'span.notranslate:not(:has(.bam-price-display)) > span[class*="price__nowrap"] > span[class*="price__integer"]',
+  PREVIOUS_PRICE: '[class*="price-module__addon"]',
+});
+
+const STYLES = Object.freeze({
+  ALONGSIDE: {
+    marginTop: '4px',
+    padding: '4px 8px',
+    backgroundColor: '#0058a3',
+    color: 'white',
+    borderRadius: '4px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    display: 'inline-block',
+  },
+  PREVIOUS_PRICE: {
+    marginLeft: '8px',
+    padding: '4px 8px',
+    backgroundColor: '#0058a3',
+    color: 'white',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontWeight: 'bold',
+    display: 'inline-block',
+  },
+});
+
+// ============================================================================
+// State Management
+// ============================================================================
+
+const state = {
+  displayMode: CONFIG.DEFAULT_DISPLAY_MODE,
+  observer: null,
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Logger utility for debugging
+ * @param {...any} args - Arguments to log
+ */
+const debugLog = (...args) => {
+  if (CONFIG.DEBUG) {
     console.log('[IKEA RSD→BAM]', ...args);
   }
-}
+};
 
-function convertRsdToBam(rsdAmount) {
-  return (rsdAmount / RSD_TO_BAM_RATE).toFixed(2);
-}
+/**
+ * Debounce function to limit execution frequency
+ * @param {Function} func - Function to debounce
+ * @param {number} delay - Delay in milliseconds
+ * @returns {Function} Debounced function
+ */
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
 
-// Load settings from storage
-function loadSettings(callback) {
-  chrome.storage.sync.get({
-    displayMode: 'alongside'
-  }, function(items) {
-    displayMode = items.displayMode;
-    debugLog(`Display mode loaded: ${displayMode}`);
-    if (callback) callback();
+/**
+ * Check if element has already been processed
+ * @param {HTMLElement} element - Element to check
+ * @returns {boolean} True if already processed
+ */
+const isAlreadyProcessed = (element) => {
+  return element?.querySelector(`.${CONFIG.MARKER_CLASS}`) !== null;
+};
+
+/**
+ * Parse price string to number
+ * @param {string} priceStr - Price string to parse
+ * @returns {number|null} Parsed price or null if invalid
+ */
+const parsePrice = (priceStr) => {
+  const cleanedStr = priceStr.replace(/\./g, '').replace(',', '.');
+  const price = parseFloat(cleanedStr);
+  return !isNaN(price) && price > 0 ? price : null;
+};
+
+/**
+ * Extract price from integer element
+ * @param {HTMLElement} element - Price element
+ * @returns {number|null} Extracted price or null
+ */
+const extractPriceFromElement = (element) => {
+  const text = element?.textContent?.trim();
+  if (!text) return null;
+
+  const cleanedText = text.replace(/[^\d]/g, '');
+  return parsePrice(cleanedText);
+};
+
+/**
+ * Extract price from text using regex
+ * @param {string} text - Text containing price
+ * @returns {number|null} Extracted price or null
+ */
+const extractPriceFromText = (text) => {
+  const match = text.match(CONFIG.PRICE_REGEX);
+  return match ? parsePrice(match[1]) : null;
+};
+
+// ============================================================================
+// Price Conversion
+// ============================================================================
+
+/**
+ * Convert RSD amount to BAM
+ * @param {number} rsdAmount - Amount in RSD
+ * @returns {string} Converted amount in BAM (formatted to 2 decimals)
+ */
+const convertRsdToBam = (rsdAmount) => {
+  return (rsdAmount / CONFIG.RSD_TO_BAM_RATE).toFixed(2);
+};
+
+// ============================================================================
+// DOM Manipulation Utilities
+// ============================================================================
+
+/**
+ * Create a styled BAM price element
+ * @param {string} bamPrice - BAM price value
+ * @param {Object} styles - Style object
+ * @returns {HTMLSpanElement} Styled element
+ */
+const createBamPriceElement = (bamPrice, styles) => {
+  const element = document.createElement('span');
+  element.className = CONFIG.MARKER_CLASS;
+  element.textContent = `≈ ${bamPrice} KM`;
+  Object.assign(element.style, styles);
+  return element;
+};
+
+/**
+ * Create a hidden marker element
+ * @returns {HTMLSpanElement} Hidden marker element
+ */
+const createHiddenMarker = () => {
+  const marker = document.createElement('span');
+  marker.className = CONFIG.MARKER_CLASS;
+  marker.style.display = 'none';
+  return marker;
+};
+
+/**
+ * Apply object styles to element
+ * @param {HTMLElement} element - Target element
+ * @param {Object} styles - Styles object
+ */
+const applyStyles = (element, styles) => {
+  Object.assign(element.style, styles);
+};
+
+/**
+ * Check if text is a currency symbol
+ * @param {string} text - Text to check
+ * @returns {boolean} True if currency symbol
+ */
+const isCurrencySymbol = (text) => {
+  const trimmedText = text.trim();
+  return CONFIG.CURRENCY_SYMBOLS.some(symbol =>
+    trimmedText === symbol || trimmedText.toLowerCase().includes('rsd')
+  );
+};
+
+// ============================================================================
+// Storage Management
+// ============================================================================
+
+/**
+ * Load settings from Chrome storage
+ * @returns {Promise<string>} Display mode setting
+ */
+const loadSettings = () => {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(
+      { displayMode: CONFIG.DEFAULT_DISPLAY_MODE },
+      (items) => {
+        state.displayMode = items.displayMode;
+        debugLog(`Display mode loaded: ${state.displayMode}`);
+        resolve(state.displayMode);
+      }
+    );
   });
-}
+};
 
-function addBamPriceToElement(priceIntegerElement, priceWrapper) {
-  // Check if already processed by looking for the BAM price display element
-  const existingBamPrice = priceWrapper.querySelector('.bam-price-display');
+// ============================================================================
+// Price Conversion Handlers
+// ============================================================================
 
-  if (existingBamPrice) {
-    return; // Already processed
-  }
+/**
+ * Replace price and currency in place
+ * @param {HTMLElement} priceElement - Price integer element
+ * @param {HTMLElement} wrapper - Price wrapper element
+ * @param {string} bamPrice - Converted BAM price
+ */
+const replacePrice = (priceElement, wrapper, bamPrice) => {
+  priceElement.textContent = bamPrice;
 
-  // Get the RSD price
-  const rsdPriceText = priceIntegerElement.textContent.trim();
-  const rsdPrice = parseFloat(rsdPriceText.replace(/[^\d]/g, ''));
-
-  if (isNaN(rsdPrice) || rsdPrice === 0) {
-    return;
-  }
-
-  // Calculate BAM price
-  const bamPrice = convertRsdToBam(rsdPrice);
-
-  if (displayMode === 'replace') {
-    // Replace mode: completely replace price and currency
-    replacePrice(priceIntegerElement, priceWrapper, bamPrice);
-  } else {
-    // Alongside mode: show BAM price next to original
-    addAlongsidePrice(priceWrapper, bamPrice);
-  }
-
-  debugLog(`Converted ${rsdPrice} RSD to ${bamPrice} BAM (mode: ${displayMode})`);
-}
-
-function replacePrice(priceIntegerElement, priceWrapper, bamPrice) {
-  // Replace the price integer with BAM price
-  priceIntegerElement.textContent = bamPrice;
-
-  // Find and replace the currency symbol (RSD or Дин or din) with KM
-  const currencyElements = priceWrapper.querySelectorAll('span');
+  // Replace currency symbols
+  const currencyElements = wrapper.querySelectorAll('span');
   currencyElements.forEach(element => {
-    const text = element.textContent.trim();
-    if (text === 'RSD' || text === 'Дин' || text === 'din' || text.toLowerCase().includes('rsd')) {
+    if (isCurrencySymbol(element.textContent)) {
       element.textContent = 'KM';
     }
   });
 
-  // Add a hidden marker element to indicate conversion
-  const marker = document.createElement('span');
-  marker.className = 'bam-price-display';
-  marker.style.display = 'none';
-  priceWrapper.appendChild(marker);
-}
+  // Add hidden marker
+  wrapper.appendChild(createHiddenMarker());
+};
 
-function addAlongsidePrice(priceWrapper, bamPrice) {
-  // Create BAM price element as a span (inline element) to match the inline container
-  const bamPriceElement = document.createElement('span');
-  bamPriceElement.className = 'bam-price-display';
-  bamPriceElement.style.cssText = `
-    margin-top: 4px;
-    padding: 4px 8px;
-    background-color: #0058a3;
-    color: white;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: bold;
-    display: inline-block;
-  `;
-  bamPriceElement.textContent = `≈ ${bamPrice} KM`;
+/**
+ * Add BAM price alongside original price
+ * @param {HTMLElement} wrapper - Price wrapper element
+ * @param {string} bamPrice - Converted BAM price
+ */
+const addAlongsidePrice = (wrapper, bamPrice) => {
+  const bamElement = createBamPriceElement(bamPrice, STYLES.ALONGSIDE);
+  wrapper.appendChild(bamElement);
+};
 
-  // Insert BAM price inside the price wrapper (span.notranslate)
-  priceWrapper.appendChild(bamPriceElement);
-}
+/**
+ * Process standard price element
+ * @param {HTMLElement} priceElement - Price integer element
+ * @param {HTMLElement} wrapper - Price wrapper element
+ */
+const processPriceElement = (priceElement, wrapper) => {
+  if (isAlreadyProcessed(wrapper)) return;
 
-function convertPreviousPrice(addonElement) {
-  // Check if already processed
-  const existingBamPrice = addonElement.querySelector('.bam-price-display');
-  if (existingBamPrice) {
-    return; // Already processed
-  }
+  const rsdPrice = extractPriceFromElement(priceElement);
+  if (!rsdPrice) return;
 
-  // Extract price from text like "Prethodna cena: 11.999RSD"
-  const text = addonElement.textContent.trim();
-  const priceMatch = text.match(/(\d+[\d.,]*)\s*RSD/i);
-
-  if (!priceMatch) {
-    return; // No RSD price found
-  }
-
-  // Parse the price (remove dots used as thousand separators, keep commas as decimal)
-  const priceStr = priceMatch[1].replace(/\./g, '').replace(',', '.');
-  const rsdPrice = parseFloat(priceStr);
-
-  if (isNaN(rsdPrice) || rsdPrice === 0) {
-    return;
-  }
-
-  // Calculate BAM price
   const bamPrice = convertRsdToBam(rsdPrice);
 
-  if (displayMode === 'replace') {
-    // Replace mode: replace the entire text with converted price
-    const newText = text.replace(/(\d+[\d.,]*)\s*RSD/i, `${bamPrice}KM`);
-    addonElement.textContent = newText;
-
-    // Add hidden marker to indicate conversion
-    const marker = document.createElement('span');
-    marker.className = 'bam-price-display';
-    marker.style.display = 'none';
-    addonElement.appendChild(marker);
+  if (state.displayMode === 'replace') {
+    replacePrice(priceElement, wrapper, bamPrice);
   } else {
-    // Alongside mode: wrap original text in span and add BAM price
+    addAlongsidePrice(wrapper, bamPrice);
+  }
+
+  debugLog(`Converted ${rsdPrice} RSD to ${bamPrice} BAM (mode: ${state.displayMode})`);
+};
+
+/**
+ * Process previous price addon element
+ * @param {HTMLElement} addonElement - Addon element containing previous price
+ */
+const processPreviousPriceElement = (addonElement) => {
+  if (isAlreadyProcessed(addonElement)) return;
+
+  const text = addonElement.textContent?.trim();
+  if (!text) return;
+
+  const rsdPrice = extractPriceFromText(text);
+  if (!rsdPrice) return;
+
+  const bamPrice = convertRsdToBam(rsdPrice);
+
+  if (state.displayMode === 'replace') {
+    const newText = text.replace(CONFIG.PRICE_REGEX, `${bamPrice}KM`);
+    addonElement.textContent = newText;
+    addonElement.appendChild(createHiddenMarker());
+  } else {
     const originalText = addonElement.textContent;
     addonElement.textContent = '';
 
@@ -144,84 +294,100 @@ function convertPreviousPrice(addonElement) {
     originalSpan.textContent = originalText;
     addonElement.appendChild(originalSpan);
 
-    const bamPriceElement = document.createElement('span');
-    bamPriceElement.className = 'bam-price-display';
-    bamPriceElement.style.cssText = `
-      margin-left: 8px;
-      padding: 4px 8px;
-      background-color: #0058a3;
-      color: white;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: bold;
-      display: inline-block;
-    `;
-    bamPriceElement.textContent = `≈ ${bamPrice} KM`;
-    addonElement.appendChild(bamPriceElement);
+    const bamElement = createBamPriceElement(bamPrice, STYLES.PREVIOUS_PRICE);
+    addonElement.appendChild(bamElement);
   }
 
-  debugLog(`Converted previous price ${rsdPrice} RSD to ${bamPrice} BAM (mode: ${displayMode})`);
-}
+  debugLog(`Converted previous price ${rsdPrice} RSD to ${bamPrice} BAM (mode: ${state.displayMode})`);
+};
 
-function addBamPrice() {
-  // Find all price integer elements using a specific selector that validates the entire DOM structure
-  // Exclude wrappers that already contain the BAM price
-  const priceIntegerElements = document.querySelectorAll(
-    'span.notranslate:not(:has(.bam-price-display)) > span[class*="price__nowrap"] > span[class*="price__integer"]'
-  );
+// ============================================================================
+// Main Conversion Logic
+// ============================================================================
 
-  debugLog(`Found ${priceIntegerElements.length} price elements to convert`);
+/**
+ * Process all price elements on the page
+ */
+const processAllPrices = () => {
+  // Process standard price elements
+  const priceElements = document.querySelectorAll(SELECTORS.PRICE_INTEGER);
+  debugLog(`Found ${priceElements.length} price elements to convert`);
 
-  priceIntegerElements.forEach((priceIntegerElement) => {
-    // Get parent (price__nowrap wrapper) and grandparent (span.notranslate - final price wrapper)
-    const parent = priceIntegerElement.parentElement;
-    const priceWrapper = parent.parentElement;
-
-    // Add BAM price to this element
-    addBamPriceToElement(priceIntegerElement, priceWrapper);
+  priceElements.forEach((priceElement) => {
+    const wrapper = priceElement?.parentElement?.parentElement;
+    if (wrapper) {
+      processPriceElement(priceElement, wrapper);
+    }
   });
 
-  // Find and convert previous price elements
-  const previousPriceElements = document.querySelectorAll('[class*="price-module__addon"]');
+  // Process previous price elements
+  const previousPriceElements = document.querySelectorAll(SELECTORS.PREVIOUS_PRICE);
   debugLog(`Found ${previousPriceElements.length} previous price elements to check`);
 
-  previousPriceElements.forEach((addonElement) => {
-    convertPreviousPrice(addonElement);
+  previousPriceElements.forEach(processPreviousPriceElement);
+};
+
+// Create debounced version for MutationObserver
+const debouncedProcessAllPrices = debounce(processAllPrices, CONFIG.DEBOUNCE_DELAY);
+
+// ============================================================================
+// Initialization and Event Handlers
+// ============================================================================
+
+/**
+ * Initialize MutationObserver to watch for dynamic content changes
+ */
+const initializeMutationObserver = () => {
+  if (state.observer) {
+    state.observer.disconnect();
+  }
+
+  state.observer = new MutationObserver(debouncedProcessAllPrices);
+
+  state.observer.observe(document.body, {
+    childList: true,
+    subtree: true,
   });
-}
 
-// Initialize and run conversion
-function initialize() {
-  loadSettings(function() {
-    // Run conversion after settings are loaded
-    addBamPrice();
+  debugLog('MutationObserver initialized');
+};
 
-    // Watch for dynamic content changes
-    const observer = new MutationObserver((mutations) => {
-      addBamPrice();
-    });
+/**
+ * Handle storage changes
+ * @param {Object} changes - Storage changes object
+ */
+const handleStorageChange = (changes) => {
+  if (changes.displayMode) {
+    state.displayMode = changes.displayMode.newValue;
+    debugLog(`Display mode changed to: ${state.displayMode}`);
+    location.reload();
+  }
+};
 
-    // Start observing the document for changes
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-  });
-}
+/**
+ * Initialize the extension
+ */
+const initialize = async () => {
+  try {
+    await loadSettings();
+    processAllPrices();
+    initializeMutationObserver();
+    debugLog('Extension initialized successfully');
+  } catch (error) {
+    console.error('[IKEA RSD→BAM] Initialization failed:', error);
+  }
+};
 
-// Run the conversion when page loads
+// ============================================================================
+// Entry Point
+// ============================================================================
+
+// Wait for DOM to be ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initialize);
 } else {
   initialize();
 }
 
-// Listen for storage changes to update display mode dynamically
-chrome.storage.onChanged.addListener(function(changes, namespace) {
-  if (changes.displayMode) {
-    displayMode = changes.displayMode.newValue;
-    debugLog(`Display mode changed to: ${displayMode}`);
-    // Reload the page to apply new settings
-    location.reload();
-  }
-});
+// Listen for storage changes
+chrome.storage.onChanged.addListener(handleStorageChange);
