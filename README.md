@@ -5,7 +5,10 @@ A Chrome extension that displays prices in BAM (Bosnian Convertible Mark) on IKE
 ## Features
 
 - Automatically converts RSD prices to BAM on IKEA Serbia product pages
-- Shows the converted price in a highlighted box below the original price
+- Two display modes:
+  - **Alongside mode**: Shows the converted price in a highlighted box next to the original price (default)
+  - **Replace mode**: Completely replaces the RSD price with BAM price and changes currency to KM
+- Configurable through extension options page
 - Uses an approximate conversion rate of 1 BAM ≈ 58.5 RSD
 
 ## Installation
@@ -16,6 +19,7 @@ A Chrome extension that displays prices in BAM (Bosnian Convertible Mark) on IKE
 4. Click "Load unpacked"
 5. Select the folder containing this extension
 6. Visit any product page on https://www.ikea.com/rs/sr/ to see the BAM price
+7. Right-click the extension icon and select "Options" to configure the display mode
 
 ## Example
 
@@ -26,6 +30,8 @@ https://www.ikea.com/rs/sr/p/laektare-navlaka-za-stolicu-gunnared-svetlozelena-8
 
 - `manifest.json` - Chrome extension configuration
 - `content.js` - Main script that handles price conversion
+- `options.html` - Options page UI
+- `options.js` - Options page logic for saving/loading settings
 - `README.md` - This file
 
 ## Note on Exchange Rate
