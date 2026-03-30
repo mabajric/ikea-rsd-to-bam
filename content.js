@@ -30,11 +30,10 @@ function loadSettings(callback) {
 }
 
 function addBamPriceToElement(priceIntegerElement, priceWrapper) {
-  // Check if already processed
+  // Check if already processed by looking for the BAM price display element
   const existingBamPrice = priceWrapper.querySelector('.bam-price-display');
-  const isReplaced = priceWrapper.hasAttribute('data-bam-replaced');
 
-  if (existingBamPrice || isReplaced) {
+  if (existingBamPrice) {
     return; // Already processed
   }
 
@@ -61,9 +60,6 @@ function addBamPriceToElement(priceIntegerElement, priceWrapper) {
 }
 
 function replacePrice(priceIntegerElement, priceWrapper, bamPrice) {
-  // Mark as replaced to avoid reprocessing
-  priceWrapper.setAttribute('data-bam-replaced', 'true');
-
   // Replace the price integer with BAM price
   priceIntegerElement.textContent = bamPrice;
 
@@ -75,6 +71,12 @@ function replacePrice(priceIntegerElement, priceWrapper, bamPrice) {
       element.textContent = 'KM';
     }
   });
+
+  // Add a hidden marker element to indicate conversion
+  const marker = document.createElement('span');
+  marker.className = 'bam-price-display';
+  marker.style.display = 'none';
+  priceWrapper.appendChild(marker);
 }
 
 function addAlongsidePrice(priceWrapper, bamPrice) {
@@ -97,18 +99,78 @@ function addAlongsidePrice(priceWrapper, bamPrice) {
   priceWrapper.appendChild(bamPriceElement);
 }
 
+function convertPreviousPrice(addonElement) {
+  // Check if already processed
+  const existingBamPrice = addonElement.querySelector('.bam-price-display');
+  if (existingBamPrice) {
+    return; // Already processed
+  }
+
+  // Extract price from text like "Prethodna cena: 11.999RSD"
+  const text = addonElement.textContent.trim();
+  const priceMatch = text.match(/(\d+[\d.,]*)\s*RSD/i);
+
+  if (!priceMatch) {
+    return; // No RSD price found
+  }
+
+  // Parse the price (remove dots used as thousand separators, keep commas as decimal)
+  const priceStr = priceMatch[1].replace(/\./g, '').replace(',', '.');
+  const rsdPrice = parseFloat(priceStr);
+
+  if (isNaN(rsdPrice) || rsdPrice === 0) {
+    return;
+  }
+
+  // Calculate BAM price
+  const bamPrice = convertRsdToBam(rsdPrice);
+
+  if (displayMode === 'replace') {
+    // Replace mode: replace the entire text with converted price
+    const newText = text.replace(/(\d+[\d.,]*)\s*RSD/i, `${bamPrice}KM`);
+    addonElement.textContent = newText;
+
+    // Add hidden marker to indicate conversion
+    const marker = document.createElement('span');
+    marker.className = 'bam-price-display';
+    marker.style.display = 'none';
+    addonElement.appendChild(marker);
+  } else {
+    // Alongside mode: wrap original text in span and add BAM price
+    const originalText = addonElement.textContent;
+    addonElement.textContent = '';
+
+    const originalSpan = document.createElement('span');
+    originalSpan.textContent = originalText;
+    addonElement.appendChild(originalSpan);
+
+    const bamPriceElement = document.createElement('span');
+    bamPriceElement.className = 'bam-price-display';
+    bamPriceElement.style.cssText = `
+      margin-left: 8px;
+      padding: 4px 8px;
+      background-color: #0058a3;
+      color: white;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      display: inline-block;
+    `;
+    bamPriceElement.textContent = `≈ ${bamPrice} KM`;
+    addonElement.appendChild(bamPriceElement);
+  }
+
+  debugLog(`Converted previous price ${rsdPrice} RSD to ${bamPrice} BAM (mode: ${displayMode})`);
+}
+
 function addBamPrice() {
   // Find all price integer elements using a specific selector that validates the entire DOM structure
-  // Exclude wrappers that already contain the BAM price or are already replaced
+  // Exclude wrappers that already contain the BAM price
   const priceIntegerElements = document.querySelectorAll(
-    'span.notranslate:not(:has(.bam-price-display)):not([data-bam-replaced]) > span[class*="price__nowrap"] > span[class*="price__integer"]'
+    'span.notranslate:not(:has(.bam-price-display)) > span[class*="price__nowrap"] > span[class*="price__integer"]'
   );
 
   debugLog(`Found ${priceIntegerElements.length} price elements to convert`);
-
-  if (priceIntegerElements.length === 0) {
-    return;
-  }
 
   priceIntegerElements.forEach((priceIntegerElement) => {
     // Get parent (price__nowrap wrapper) and grandparent (span.notranslate - final price wrapper)
@@ -117,6 +179,14 @@ function addBamPrice() {
 
     // Add BAM price to this element
     addBamPriceToElement(priceIntegerElement, priceWrapper);
+  });
+
+  // Find and convert previous price elements
+  const previousPriceElements = document.querySelectorAll('[class*="price-module__addon"]');
+  debugLog(`Found ${previousPriceElements.length} previous price elements to check`);
+
+  previousPriceElements.forEach((addonElement) => {
+    convertPreviousPrice(addonElement);
   });
 }
 
